@@ -601,6 +601,16 @@ function ViewerCanvas({ children }: { children: React.ReactNode }) {
 
       const webgazer = (window as any).webgazer;
       if (!webgazer || active) return;
+      // Prefer clmtrackr backend to avoid MediaPipe asset path requirements
+      // in self-hosted deployments. Some WebGazer builds resolve tracker
+      // switching asynchronously, so we await it when needed.
+      if (typeof webgazer.setTracker === "function") {
+        const trackerResult = webgazer.setTracker("clmtrackr");
+        if (trackerResult && typeof trackerResult.then === "function") {
+          await trackerResult;
+        }
+      }
+
       webgazer
         .setGazeListener((data: { x: number; y: number } | null) => {
           if (data === null) return;
@@ -608,8 +618,13 @@ function ViewerCanvas({ children }: { children: React.ReactNode }) {
         })
         .showVideoPreview(false)
         .showFaceOverlay(false)
-        .showFaceFeedbackBox(false)
-        .begin();
+        .showFaceFeedbackBox(false);
+
+      const beginResult = webgazer.begin();
+      if (beginResult && typeof beginResult.then === "function") {
+        await beginResult;
+      }
+
       active = true;
     };
 
