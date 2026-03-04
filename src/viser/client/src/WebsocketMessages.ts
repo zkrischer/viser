@@ -1186,6 +1186,24 @@ export interface ScenePointerEnableMessage {
   enable: boolean;
   event_type: "click" | "rect-select";
 }
+/** Message for gaze-based ray updates in the scene.
+ *
+ * (automatically generated)
+ */
+export interface SceneGazeMessage {
+  type: "SceneGazeMessage";
+  ray_origin: [number, number, number];
+  ray_direction: [number, number, number];
+  screen_pos: [number, number];
+}
+/** Message to enable/disable gaze updates.
+ *
+ * (automatically generated)
+ */
+export interface SceneGazeEnableMessage {
+  type: "SceneGazeEnableMessage";
+  enable: boolean;
+}
 /** Fog message.
  *
  * (automatically generated)
@@ -1659,6 +1677,8 @@ export type Message =
   | ViewerCameraMessage
   | ScenePointerMessage
   | ScenePointerEnableMessage
+  | SceneGazeMessage
+  | SceneGazeEnableMessage
   | EnvironmentMapMessage
   | FogMessage
   | EnableLightsMessage

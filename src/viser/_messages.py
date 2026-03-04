@@ -239,6 +239,26 @@ class ScenePointerEnableMessage(Message):
 
 
 @dataclasses.dataclass
+class SceneGazeMessage(Message):
+    """Message for gaze-based ray updates in the scene."""
+
+    ray_origin: Tuple[float, float, float]
+    ray_direction: Tuple[float, float, float]
+    screen_pos: Tuple[float, float]
+
+
+@dataclasses.dataclass
+class SceneGazeEnableMessage(Message):
+    """Message to enable/disable gaze updates."""
+
+    enable: bool
+
+    @override
+    def redundancy_key(self) -> str:
+        return type(self).__name__ + "-" + str(self.enable).lower()
+
+
+@dataclasses.dataclass
 class CameraFrustumMessage(_CreateSceneNodeMessage):
     """Variant of CameraMessage used for visualizing camera frustums.
 
