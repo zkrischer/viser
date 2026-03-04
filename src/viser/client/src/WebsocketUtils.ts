@@ -6,7 +6,10 @@ import { ViewerContext, ViewerContextContents } from "./ViewerContext";
 /** Easier, hook version of makeThrottledMessageSender. */
 export function useThrottledMessageSender(throttleMilliseconds: number) {
   const viewer = React.useContext(ViewerContext)!;
-  return makeThrottledMessageSender(viewer, throttleMilliseconds);
+  return React.useMemo(
+    () => makeThrottledMessageSender(viewer, throttleMilliseconds),
+    [viewer, throttleMilliseconds],
+  );
 }
 
 /** Returns a function for sending messages, with automatic throttling. */

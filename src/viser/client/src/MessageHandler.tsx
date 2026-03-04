@@ -203,6 +203,12 @@ function useMessageHandler() {
         return;
       }
 
+
+      case "SceneGazeEnableMessage": {
+        viewerMutable.gazeTrackingEnabled = message.enable;
+        return;
+      }
+
       // Add an environment map.
       case "EnvironmentMapMessage": {
         viewer.useEnvironment.setState({ environmentMap: message });
