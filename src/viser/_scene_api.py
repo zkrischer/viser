@@ -56,6 +56,7 @@ from ._scene_handles import (
     SceneNodeHandle,
     SceneNodePointerEvent,
     ScenePointerEvent,
+    SceneGazeEvent,
     SplineCatmullRomHandle,
     SplineCubicBezierHandle,
     SpotLightHandle,
@@ -169,6 +170,9 @@ class SceneApi:
         self._scene_pointer_done_cb: Callable[[], None | Coroutine] = lambda: None
         self._scene_pointer_event_type: _messages.ScenePointerEventType | None = None
 
+        self._scene_gaze_cb: Callable[[SceneGazeEvent], None | Coroutine] | None = None
+        self._scene_gaze_done_cb: Callable[[], None | Coroutine] = lambda: None
+
         # Set up world axes handle.
         self.world_axes: FrameHandle = self.add_frame(
             "/WorldAxes",
@@ -197,6 +201,10 @@ class SceneApi:
         self._websock_interface.register_handler(
             _messages.ScenePointerMessage,
             self._handle_scene_pointer_updates,
+        )
+        self._websock_interface.register_handler(
+            _messages.SceneGazeMessage,
+            self._handle_scene_gaze_updates,
         )
 
     def _ensure_ancestors_exist(self, name: str) -> None:
@@ -2612,6 +2620,69 @@ class SceneApi:
             self._thread_executor.submit(
                 self._scene_pointer_cb, event
             ).add_done_callback(print_threadpool_errors)
+
+    async def _handle_scene_gaze_updates(
+        self, client_id: ClientId, message: _messages.SceneGazeMessage
+    ):
+        """Callback for handling gaze messages."""
+        event = SceneGazeEvent(
+            client=self._get_client_handle(client_id),
+            client_id=client_id,
+            ray_origin=message.ray_origin,
+            ray_direction=message.ray_direction,
+            screen_pos=message.screen_pos,
+        )
+        if self._scene_gaze_cb is None:
+            return
+        if asyncio.iscoroutinefunction(self._scene_gaze_cb):
+            await self._scene_gaze_cb(event)
+        else:
+            self._thread_executor.submit(
+                self._scene_gaze_cb, event
+            ).add_done_callback(print_threadpool_errors)
+
+    def on_gaze_event(
+        self,
+    ) -> Callable[
+        [Callable[[SceneGazeEvent], None]], Callable[[SceneGazeEvent], None]
+    ]:
+        """Add a callback for scene gaze events."""
+
+        def decorator(
+            func: Callable[[SceneGazeEvent], None],
+        ) -> Callable[[SceneGazeEvent], None]:
+            if self._scene_gaze_cb is not None:
+                self.remove_gaze_callback()
+            self._scene_gaze_cb = func
+            self._websock_interface.queue_message(_messages.SceneGazeEnableMessage(enable=True))
+            return func
+
+        return decorator
+
+    def on_gaze_callback_removed(
+        self,
+        func: Callable[[], NoneOrCoroutine],
+    ) -> Callable[[], NoneOrCoroutine]:
+        """Add a callback to run automatically when the scene gaze callback is removed."""
+        self._scene_gaze_done_cb = func
+        return func
+
+    def remove_gaze_callback(self) -> None:
+        """Remove the currently attached scene gaze event callback."""
+
+        if self._scene_gaze_cb is None:
+            return
+
+        self._websock_interface.queue_message(_messages.SceneGazeEnableMessage(enable=False))
+        self._owner.flush()
+
+        if asyncio.iscoroutinefunction(self._scene_gaze_done_cb):
+            self._event_loop.create_task(self._scene_gaze_done_cb())
+        else:
+            self._scene_gaze_done_cb()
+
+        self._scene_gaze_cb = None
+        self._scene_gaze_done_cb = lambda: None
 
     def on_pointer_event(
         self, event_type: Literal["click", "rect-select"]

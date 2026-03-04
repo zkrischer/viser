@@ -34,14 +34,14 @@ if TYPE_CHECKING:
 
 @dataclasses.dataclass(frozen=True)
 class ScenePointerEvent:
-    """Event passed to pointer callbacks for the scene (currently only clicks)."""
+    """Event passed to pointer callbacks for the scene."""
 
     client: ClientHandle
     """Client that triggered this event."""
     client_id: int
     """ID of client that triggered this event."""
     event_type: _messages.ScenePointerEventType
-    """Type of event that was triggered. Currently we only support clicks and box selections."""
+    """Type of event that was triggered. Supports clicks and box selections."""
     ray_origin: tuple[float, float, float] | None
     """Origin of 3D ray corresponding to this click, in world coordinates."""
     ray_direction: tuple[float, float, float] | None
@@ -61,6 +61,23 @@ class ScenePointerEvent:
         """
         return self.event_type
 
+
+
+
+@dataclasses.dataclass(frozen=True)
+class SceneGazeEvent:
+    """Event passed to gaze callbacks for the scene."""
+
+    client: ClientHandle
+    """Client that triggered this event."""
+    client_id: int
+    """ID of client that triggered this event."""
+    ray_origin: tuple[float, float, float]
+    """Origin of 3D ray corresponding to gaze, in world coordinates."""
+    ray_direction: tuple[float, float, float]
+    """Direction of 3D ray corresponding to gaze, in world coordinates."""
+    screen_pos: tuple[float, float]
+    """Screen position of gaze (OpenCV image coordinates, 0 to 1)."""
 
 TSceneNodeHandle = TypeVar("TSceneNodeHandle", bound="SceneNodeHandle")
 

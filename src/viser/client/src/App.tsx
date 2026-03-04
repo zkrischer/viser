@@ -135,6 +135,25 @@ const getDefaultServerFromUrl = (): string => {
 /** Disables rendering when component is not in view. */
 const DisableRender = (): null => useFrame(() => null, 1000);
 
+const WEBGAZER_SCRIPT_URL = "https://webgazer.cs.brown.edu/webgazer.js";
+
+let webgazerScriptPromise: Promise<void> | null = null;
+
+async function ensureWebgazerLoaded(): Promise<void> {
+  if ((window as any).webgazer) return;
+  if (webgazerScriptPromise !== null) return webgazerScriptPromise;
+
+  webgazerScriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = WEBGAZER_SCRIPT_URL;
+    script.async = true;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Failed to load WebGazer script."));
+    document.head.appendChild(script);
+  });
+  return webgazerScriptPromise;
+}
+
 // ======= Main component tree =======
 
 /**
@@ -252,6 +271,7 @@ function ViewerRoot() {
       dragEnd: [0, 0],
       isDragging: false,
     },
+    gazeTrackingEnabled: false,
 
     // Skinned mesh state.
     skinnedMeshState: {},
@@ -563,6 +583,54 @@ function ViewerCanvas({ children }: { children: React.ReactNode }) {
     pointerInfo.isDragging = false;
   };
 
+  useEffect(() => {
+    let active = false;
+    let disposed = false;
+
+    const stopWebgazer = () => {
+      const webgazer = (window as any).webgazer;
+      if (!webgazer) return;
+      webgazer.clearGazeListener();
+      webgazer.end();
+      active = false;
+    };
+
+    const startWebgazer = async () => {
+      await ensureWebgazerLoaded();
+      if (disposed) return;
+
+      const webgazer = (window as any).webgazer;
+      if (!webgazer || active) return;
+      webgazer
+        .setGazeListener((data: { x: number; y: number } | null) => {
+          if (data === null) return;
+          sendGazeMessage(viewer, [data.x, data.y], sendClickThrottled);
+        })
+        .showVideoPreview(false)
+        .showFaceOverlay(false)
+        .showFaceFeedbackBox(false)
+        .begin();
+      active = true;
+    };
+
+    const intervalHandle = window.setInterval(() => {
+      const enabled = viewer.mutable.current.gazeTrackingEnabled;
+      if (enabled && !active) {
+        void startWebgazer().catch((error) => {
+          console.warn("Unable to start WebGazer.", error);
+        });
+      } else if (!enabled && active) {
+        stopWebgazer();
+      }
+    }, 250);
+
+    return () => {
+      disposed = true;
+      window.clearInterval(intervalHandle);
+      stopWebgazer();
+    };
+  }, [viewer, sendClickThrottled]);
+
   const fixedDpr = viewer.useDevSettings((state) => state.fixedDpr);
   const sceneContents = React.useMemo(
     () => (
@@ -629,6 +697,36 @@ function sendClickMessage(
     ray_origin: [ray.origin.x, ray.origin.y, ray.origin.z],
     ray_direction: [ray.direction.x, ray.direction.y, ray.direction.z],
     screen_pos: [[mouseVectorOpenCV.x, mouseVectorOpenCV.y]],
+  });
+}
+
+function sendGazeMessage(
+  viewer: ViewerContextContents,
+  screenPos: [number, number],
+  sendClickThrottled: (message: any) => void,
+) {
+  const canvas = viewer.mutable.current.canvas;
+  if (canvas === null) return;
+
+  const canvasBbox = canvas.getBoundingClientRect();
+  const pointerPos: [number, number] = [
+    screenPos[0] - canvasBbox.left,
+    screenPos[1] - canvasBbox.top,
+  ];
+
+  const raycaster = new THREE.Raycaster();
+  const mouseVector = ndcFromPointerXy(viewer, pointerPos);
+  if (mouseVector === null) return;
+
+  raycaster.setFromCamera(mouseVector, viewer.mutable.current.camera!);
+  const ray = rayToViserCoords(viewer, raycaster.ray);
+  const mouseVectorOpenCV = opencvXyFromPointerXy(viewer, pointerPos);
+
+  sendClickThrottled({
+    type: "SceneGazeMessage",
+    ray_origin: [ray.origin.x, ray.origin.y, ray.origin.z],
+    ray_direction: [ray.direction.x, ray.direction.y, ray.direction.z],
+    screen_pos: [mouseVectorOpenCV.x, mouseVectorOpenCV.y],
   });
 }
 
